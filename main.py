@@ -158,18 +158,6 @@ def login():
             error = 'Invalid username or password.'
     return render_template("login.html", error=error, next=next_page)
 
-@app.route('/studytracker')  # route for the study tracker page
-def studytracker():
-    return render_template("studytracker.html")
-
-@app.route('/congrats')
-@login_required
-def congrats():
-    from model.congrats_message import CongratsMessage
-
-    messages = CongratsMessage.get_by_user(current_user.id)
-    return render_template("congrats.html", messages=messages, project="Congrats Messages")
-    
 @app.route('/logout')
 def logout():
     logout_user()
