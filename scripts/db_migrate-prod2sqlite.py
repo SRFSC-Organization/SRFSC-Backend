@@ -394,6 +394,7 @@ def load_users(users_data):
                 classes=user_data.get('class') or user_data.get('_class'),
                 game_profile=user_data.get('game_profile') or user_data.get('gameProfile'),
             )
+            user._srfsc_profile = user_data.get('srfsc_profile')
             if user_data.get('email'):
                 user.email = user_data['email']
 

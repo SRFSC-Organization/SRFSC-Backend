@@ -1,5 +1,77 @@
 # README
 
+## SRFSC login, profile, and interest quiz
+
+The SRFSC frontend lives in the sibling `capstone2pages` repository, with source
+pages under `_projects/systems/srfsc/navigation/`. Its member login is
+`/capstone/srfsc/app/login/` and its profile/quiz is `/capstone/srfsc/app/profile/`
+(prepend the frontend's configured base URL).
+
+These pages use this Flask backend's account service, configured through the
+frontend's `assets/js/api/config.js` (`pythonURI`, locally port 8587). Existing
+SRFSC events and reports continue using the frontend's separate council service
+on port 8599. They are separate services.
+
+Before starting this checkout, prepare storage without resetting existing data:
+
+```bash
+venv/bin/python scripts/migrate_srfsc_profile.py
+```
+
+The migration adds a nullable `_srfsc_profile` JSON column to existing accounts,
+or creates empty account tables for a fresh database. It is safe to repeat and
+does not create default passwords. Run it before starting the updated server.
+For an existing database, back it up before deploying schema changes.
+
+A council operator can provision an account locally; the password is prompted
+and is never supplied in a command argument:
+
+```bash
+venv/bin/python scripts/create_srfsc_member.py --uid neighbor --name "Community Member"
+# Council operators only: append --role Admin when appropriate.
+./run_backend.sh
+```
+
+Existing verified accounts also work. New school accounts retain the existing
+verification flow. SRFSC provisioning does not require school or GitHub signup.
+Ensure port 8587 is serving **this checkout**; another Flask repository on the
+same port will not have these new endpoints. Do not run `db_init.py` to migrate
+an existing database; it resets tables.
+
+| Method | Endpoint | Access |
+| --- | --- | --- |
+| POST / DELETE | `/api/authenticate` | Existing login / authenticated logout |
+| GET | `/api/srfsc/quiz` | Public questionnaire definition |
+| GET | `/api/srfsc/profile` | Signed-in user's profile and saved answers |
+| PUT | `/api/srfsc/profile` | Update only the signed-in user's name and quiz |
+
+The quiz asks about participation, interests, experience, availability, and the
+user's first goal. A save sends `{ "name": "...", "answers": { ... } }` with all
+five answers. Its response contains saved answers, completion time, and links
+to existing preparation, event, or volunteer pages. It does not subscribe users
+to email, RSVP to events, or enroll them as volunteers automatically.
+
+Resident and Volunteer are participation preferences. Account roles (`User`,
+`Admin`, and existing school roles) remain server-controlled. Quiz submissions
+cannot grant administrator permissions. Answers are omitted from general user
+responses and preserved through admin user export/import and migration scripts.
+The separate council Admin page still uses its existing admin-key mechanism.
+
+In production, configure `pythonURI` to this backend's HTTPS origin and allow
+the deployed frontend origin in `__init__.py`. The current production frontend
+default points to the Open Coding Society service; local implementation does
+not deploy these changes there. Existing cookie-domain configuration in
+`api/user.py` must also match your hosting domain when deploying elsewhere.
+
+Validation:
+
+```bash
+venv/bin/python -m unittest testing.test_srfsc_profile -v
+# From capstone2pages:
+node --test tests/test_srfsc_member.mjs
+make build-registered-projects ALL_PROJECTS=systems/srfsc
+```
+
 > This is a project to support AP Computer Science Principles (APCSP) as well as a UC articulated Data Structures course. It was crafted iteratively starting in 2020 to the present time.  The primary purposes are ...
 
 - Used as starter code for student projects for `AP CSP 1 and 2` and `Data Structures 1` curriculum.

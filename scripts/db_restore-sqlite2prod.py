@@ -88,6 +88,7 @@ def read_local_data_from_db():
             all_data['users'] = []
             for user in users:
                 user_data = user.read()
+                user_data['srfsc_profile'] = user._srfsc_profile
                 user_data['sections'] = [s.read() for s in user.sections]
                 all_data['users'].append(user_data)
             print(f"    Found {len(all_data['users'])} users")

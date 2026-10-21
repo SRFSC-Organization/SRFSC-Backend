@@ -147,6 +147,7 @@ class ExportAllData(Resource):
         result = []
         for user in users:
             user_data = user.read()
+            user_data['srfsc_profile'] = user._srfsc_profile
             # Include sections for each user
             user_data['sections'] = [s.read() for s in user.sections]
             result.append(user_data)
@@ -428,6 +429,7 @@ class ImportAllData(Resource):
                     game_profile=user_data.get('game_profile') or user_data.get('gameProfile')
                 )
 
+                user._srfsc_profile = user_data.get('srfsc_profile')
                 # Set email via property (not a constructor param)
                 if user_data.get('email'):
                     user.email = user_data.get('email')
@@ -844,6 +846,7 @@ class ExportUsers(Resource):
         result = []
         for user in pagination.items:
             user_data = user.read()
+            user_data['srfsc_profile'] = user._srfsc_profile
             user_data['sections'] = [s.read() for s in user.sections]
             result.append(user_data)
 

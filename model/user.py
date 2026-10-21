@@ -158,6 +158,8 @@ class User(db.Model, UserMixin):
     _class = db.Column(db.JSON, unique=False, nullable=True)
     _school = db.Column(db.String(255), default="Unknown", nullable=True)
     _game_profile = db.Column(db.JSON, unique=False, nullable=True)
+    # Private SRFSC quiz answers; deliberately excluded from the general user API.
+    _srfsc_profile = db.Column(db.JSON, nullable=True)
     # Bumped every time the password actually changes (set_password). Embedded in issued
     # JWTs and in the Flask-Login session id (see get_id) and checked on every request, so
     # a stolen JWT or session cookie stops working the moment this account's password is
