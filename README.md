@@ -8,7 +8,7 @@ pages under `_projects/systems/srfsc/navigation/`. Its member login is
 (prepend the frontend's configured base URL).
 
 These pages use this Flask backend's account service, configured through the
-frontend's `assets/js/api/config.js` (`pythonURI`, locally port 8587). Existing
+frontend's `assets/js/api/config.js` (`srfscAccountURI`, locally port 8587). Existing
 SRFSC events and reports continue using the frontend's separate council service
 on port 8599. They are separate services.
 
@@ -40,10 +40,21 @@ an existing database; it resets tables.
 
 | Method | Endpoint | Access |
 | --- | --- | --- |
+| GET | `/api/login` | Public account-service readiness check (like `/api/jokes`) |
+| POST / DELETE | `/api/login` | Frontend password login / authenticated logout |
+| GET | `/api/login/me` | Signed-in user identity |
 | POST / DELETE | `/api/authenticate` | Existing login / authenticated logout |
 | GET | `/api/srfsc/quiz` | Public questionnaire definition |
 | GET | `/api/srfsc/profile` | Signed-in user's profile and saved answers |
 | PUT | `/api/srfsc/profile` | Update only the signed-in user's name and quiz |
+
+`api/login.py` follows the same Blueprint → Api → Resource registration pattern
+as `hacks/joke.py`. It reuses existing password verification and JWT cookie
+handling instead of maintaining a second login system. The frontend checks
+`GET /api/login` before enabling sign-in and shows when no verified accounts
+have been added. Start `./run_backend.sh` to prepare storage and run this checkout;
+then create a member with the command above. Reload or select **Connect again**
+on the login page after adding the first member.
 
 The quiz asks about participation, interests, experience, availability, and the
 user's first goal. A save sends `{ "name": "...", "answers": { ... } }` with all

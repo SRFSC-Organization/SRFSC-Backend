@@ -13,6 +13,7 @@ from __init__ import app, db, login_manager  # Key Flask objects
 from model.persona import Persona, initPersonas, initPersonaUsers
 # API endpoints
 from api.user import user_api 
+from api.login import login_api
 from api.python_exec_api import python_exec_api
 from api.javascript_exec_api import javascript_exec_api
 from api.section import section_api
@@ -72,6 +73,7 @@ app.config['KASM_API_KEY_SECRET'] = os.getenv('KASM_API_KEY_SECRET')
 app.register_blueprint(python_exec_api)
 app.register_blueprint(javascript_exec_api)
 app.register_blueprint(user_api)
+app.register_blueprint(login_api)
 app.register_blueprint(section_api)
 app.register_blueprint(persona_api)
 app.register_blueprint(skill_passport_api)

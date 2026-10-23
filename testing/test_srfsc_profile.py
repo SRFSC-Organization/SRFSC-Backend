@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from __init__ import db, login_manager
 from api.user import user_api
+from api.login import login_api
 from api.srfsc_profile import srfsc_profile_api
 from model.user import User
 from model.persona import Persona  # Register the user/persona relationship.
@@ -29,6 +30,7 @@ class ProfileTest(unittest.TestCase):
         login_manager.init_app(self.app)
         login_manager.user_loader(lambda user_id: None)
         self.app.register_blueprint(user_api)
+        self.app.register_blueprint(login_api)
         self.app.register_blueprint(srfsc_profile_api)
         self.context = self.app.app_context()
         self.context.push()
@@ -58,6 +60,37 @@ class ProfileTest(unittest.TestCase):
         self.assertEqual(len(self.client.get('/api/srfsc/quiz').json['questions']), 5)
         self.assertEqual(self.client.get('/api/srfsc/profile').status_code, 401)
         self.assertEqual(self.save().status_code, 401)
+
+    def test_login_resource_follows_jokes_style_get_and_post(self):
+        status = self.client.get('/api/login')
+        self.assertEqual(status.status_code, 200)
+        self.assertEqual(status.json['service'], 'srfsc-accounts')
+        self.assertTrue(status.json['accounts_available'])
+        self.assertNotIn('uid', status.json)
+        self.assertEqual(self.client.get('/api/login/me').status_code, 401)
+        login = self.client.post('/api/login', json={'uid': 'neighbor', 'password': 'TestPassword123!'})
+        self.assertEqual(login.status_code, 200)
+        self.assertIn('test_jwt=', login.headers['Set-Cookie'])
+        self.assertEqual(self.client.get('/api/login/me').json['uid'], 'neighbor')
+        self.assertEqual(self.client.get('/api/srfsc/profile').status_code, 200)
+        self.assertEqual(self.client.delete('/api/login').status_code, 200)
+        self.assertEqual(self.client.get('/api/login/me').status_code, 401)
+
+    def test_login_rejects_bad_credentials_and_invalid_payloads(self):
+        self.assertEqual(self.client.post('/api/login', json={
+            'uid': 'neighbor', 'password': 'wrong-password'}).status_code, 401)
+        for body in ([], 'invalid', None, {}, {'uid': 4, 'password': 'pass'},
+                     {'uid': 'neighbor', 'password': []}):
+            with self.subTest(body=body):
+                self.assertEqual(self.client.post('/api/login', json=body).status_code, 400)
+
+    def test_login_readiness_explains_when_no_verified_accounts_exist(self):
+        for user in User.query.all():
+            user.active = False
+        db.session.commit()
+        response = self.client.get('/api/login')
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json['accounts_available'])
 
     def test_saved_answers_survive_login_and_are_private(self):
         self.assertEqual(self.login().status_code, 200)

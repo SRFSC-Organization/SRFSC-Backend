@@ -1,4 +1,8 @@
 #!/bin/bash
+set -euo pipefail
+
+# Always start this checkout, including when launched from another directory.
+cd "$(dirname "$0")"
 
 # Quick script to run the Flask backend
 
@@ -14,7 +18,8 @@ else
 fi
 
 # Run the Flask app
-echo "✓ Starting Flask on http://localhost:8587"
+python scripts/migrate_srfsc_profile.py
+echo "✓ Starting Flask on http://localhost:${FLASK_PORT:-8587}"
 echo ""
-python main.py
+exec python main.py
 
