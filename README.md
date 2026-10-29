@@ -28,6 +28,8 @@ and is never supplied in a command argument:
 
 ```bash
 venv/bin/python scripts/create_srfsc_member.py --uid neighbor --name "Community Member"
+# Council admin who can review request-survey submissions on /capstone/srfsc/app/council/
+venv/bin/python scripts/create_srfsc_member.py --uid council-admin --name "Council Admin" --role Admin
 # Council operators only: append --role Admin when appropriate.
 ./run_backend.sh
 ```
@@ -47,6 +49,10 @@ an existing database; it resets tables.
 | GET | `/api/srfsc/quiz` | Public questionnaire definition |
 | GET | `/api/srfsc/profile` | Signed-in user's profile and saved answers |
 | PUT | `/api/srfsc/profile` | Update only the signed-in user's name and quiz |
+| GET | `/api/srfsc/requests/options` | Public list of request types and review statuses |
+| POST | `/api/srfsc/requests` | Public request survey (name, email, request type, message, optional neighborhood) |
+| GET | `/api/srfsc/requests` | Council `Admin` accounts only: all requests, newest first (`?status=New` filters) |
+| PUT | `/api/srfsc/requests/<id>` | Council `Admin` accounts only: set `status` and an optional `admin_note` |
 
 `api/login.py` follows the same Blueprint → Api → Resource registration pattern
 as `hacks/joke.py`. It reuses existing password verification and JWT cookie

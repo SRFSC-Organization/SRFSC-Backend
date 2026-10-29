@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add private quiz storage without resetting existing accounts or tables."""
+"""Add SRFSC quiz and request-survey storage without resetting existing accounts or tables."""
 from pathlib import Path
 import sys
 
@@ -9,6 +9,7 @@ from __init__ import app, db
 
 
 def migrate(engine):
+    changed = False
     if not inspect(engine).has_table('users'):
         # A fresh checkout has no accounts yet. Create the account tables without
         # seeding passwords or running the destructive db_init.py reset workflow.
@@ -18,13 +19,17 @@ def migrate(engine):
             User.__table__, Section.__table__, UserSection.__table__,
             Persona.__table__, UserPersona.__table__,
         ])
-        return True
-    columns = {column['name'] for column in inspect(engine).get_columns('users')}
-    if '_srfsc_profile' in columns:
-        return False
-    with engine.begin() as connection:
-        connection.execute(text('ALTER TABLE users ADD COLUMN _srfsc_profile JSON NULL'))
-    return True
+        changed = True
+    elif '_srfsc_profile' not in {column['name'] for column in inspect(engine).get_columns('users')}:
+        with engine.begin() as connection:
+            connection.execute(text('ALTER TABLE users ADD COLUMN _srfsc_profile JSON NULL'))
+        changed = True
+    if not inspect(engine).has_table('srfsc_requests'):
+        # Public council request survey (api/srfsc_requests.py).
+        from model.srfsc_request import SrfscRequest
+        db.metadata.create_all(bind=engine, tables=[SrfscRequest.__table__])
+        changed = True
+    return changed
 
 
 if __name__ == '__main__':
