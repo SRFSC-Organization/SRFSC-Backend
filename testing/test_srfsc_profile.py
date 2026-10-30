@@ -181,6 +181,29 @@ class ProfileTest(unittest.TestCase):
         self.assertIn('Domain=srfsc.example', response.headers['Set-Cookie'])
 
 
+    def test_signup_creates_an_active_member_who_can_log_in(self):
+        response = self.client.post('/api/srfsc/signup', json={
+            'name': ' New Neighbor ', 'uid': 'new.neighbor', 'password': 'LongEnoughPass1!', 'role': 'Admin'})
+        self.assertEqual(response.status_code, 201)
+        user = User.query.filter_by(_uid='new.neighbor').one()
+        self.assertEqual((user.name, user.role, user.active), ('New Neighbor', 'User', True))
+        login = self.client.post('/api/login', json={'uid': 'new.neighbor', 'password': 'LongEnoughPass1!'})
+        self.assertEqual(login.status_code, 200)
+        self.assertEqual(self.client.get('/api/srfsc/profile').json['account_role'], 'User')
+
+    def test_signup_rejects_taken_usernames_and_weak_input(self):
+        cases = [
+            ({'name': 'Someone', 'uid': 'NEIGHBOR', 'password': 'LongEnoughPass1!'}, 409),
+            ({'name': 'Someone', 'uid': 'fresh', 'password': 'short'}, 400),
+            ({'name': 'Someone', 'uid': 'has spaces', 'password': 'LongEnoughPass1!'}, 400),
+            ({'name': 'S', 'uid': 'fresh', 'password': 'LongEnoughPass1!'}, 400),
+            ([], 400),
+        ]
+        for body, status in cases:
+            with self.subTest(body=body):
+                self.assertEqual(self.client.post('/api/srfsc/signup', json=body).status_code, status)
+        self.assertIsNone(User.query.filter_by(_uid='fresh').first())
+
     def test_malformed_payload_and_name_validation(self):
         self.login()
         for body in ([], None, 'text'):
@@ -246,6 +269,17 @@ class FrontendCorsTest(unittest.TestCase):
 
 
 class MigrationTest(unittest.TestCase):
+    def test_empty_request_table_gets_one_demo_request(self):
+        engine = create_engine('sqlite://')
+        migrate(engine)
+        migrate(engine)
+        with engine.connect() as connection:
+            rows = connection.execute(text('SELECT name, status, created_at FROM srfsc_requests')).all()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][:2], ('Demo Neighbor', 'New'))
+        self.assertIsNotNone(rows[0][2])
+        engine.dispose()
+
     def test_fresh_database_creates_account_storage_without_seeding_passwords(self):
         engine = create_engine('sqlite://')
         self.assertTrue(migrate(engine))

@@ -56,6 +56,7 @@ an existing database; it resets tables.
 | POST / DELETE | `/api/login` | Frontend password login / authenticated logout |
 | GET | `/api/login/me` | Signed-in user identity |
 | POST / DELETE | `/api/authenticate` | Existing login / authenticated logout |
+| POST | `/api/srfsc/signup` | Public signup; always creates an active regular member (never Admin) |
 | GET | `/api/srfsc/quiz` | Public questionnaire definition |
 | GET | `/api/srfsc/profile` | Signed-in user's profile and saved answers |
 | PUT | `/api/srfsc/profile` | Update only the signed-in user's name and quiz |

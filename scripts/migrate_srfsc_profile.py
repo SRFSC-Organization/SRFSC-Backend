@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Add SRFSC quiz and request-survey storage without resetting existing accounts or tables."""
+"""Add SRFSC quiz and request-survey storage without resetting existing accounts or tables.
+
+An empty request table also gets one clearly labeled demo request so the council review page has
+something to show.
+"""
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, select, text
 from __init__ import app, db
 
 
@@ -29,7 +33,27 @@ def migrate(engine):
         from model.srfsc_request import SrfscRequest
         db.metadata.create_all(bind=engine, tables=[SrfscRequest.__table__])
         changed = True
+    if seed_demo_request(engine):
+        changed = True
     return changed
+
+
+DEMO_REQUEST = {
+    'name': 'Demo Neighbor', 'email': 'demo@example.org', 'neighborhood': 'Ironwood Rd',
+    'request_type': 'Home wildfire assessment',
+    'message': ('DEMO REQUEST - sample data, not a real neighbor. Dry brush and a dead pine are '
+                'right behind our fence along the canyon. Could a volunteer look at it?'),
+}
+
+
+def seed_demo_request(engine):
+    """Add the demo request only when there are no requests at all."""
+    from model.srfsc_request import SrfscRequest
+    with engine.begin() as connection:
+        if connection.execute(select(SrfscRequest.id).limit(1)).first():
+            return False
+        connection.execute(SrfscRequest.__table__.insert().values(**DEMO_REQUEST, status='New'))
+    return True
 
 
 if __name__ == '__main__':
