@@ -12,6 +12,16 @@ frontend's `assets/js/api/config.js` (`srfscAccountURI`, locally port 8587). Exi
 SRFSC events and reports continue using the frontend's separate council service
 on port 8599. They are separate services.
 
+### Run both repositories locally
+
+No public server is needed for local login. Start this backend with
+`./run_backend.sh`, then run `make serve-current` from `../capstone2pages`.
+Open `http://localhost:4500/capstone/srfsc/app/login/` and sign in with a
+verified account. The frontend automatically uses `http://localhost:8587`
+on localhost (or `http://127.0.0.1:8587` when opened through 127.0.0.1).
+Use the provisioning command below if you do not have an account yet.
+Restart an already-running backend after pulling authentication changes.
+
 Before starting this checkout, prepare storage without resetting existing data:
 
 ```bash
@@ -74,16 +84,25 @@ cannot grant administrator permissions. Answers are omitted from general user
 responses and preserved through admin user export/import and migration scripts.
 The separate council Admin page still uses its existing admin-key mechanism.
 
-In production, configure `pythonURI` to this backend's HTTPS origin and allow
-the deployed frontend origin in `__init__.py`. The current production frontend
-default points to the Open Coding Society service; local implementation does
-not deploy these changes there. Existing cookie-domain configuration in
-`api/user.py` must also match your hosting domain when deploying elsewhere.
+Flask can also be hosted publicly later. For production, set the frontend's
+`srfsc_account_api_url` in `_config.yml` to this backend's HTTPS origin and
+rebuild the frontend. Leaving it blank disables production member login.
+Set `IS_PRODUCTION=true` and a private `SECRET_KEY` on the backend: JWT cookies
+then use Secure, HttpOnly, and SameSite=None. Cookies are host-only by default,
+so they work on your backend domain without an OCS domain dependency. An
+optional `JWT_COOKIE_DOMAIN` can explicitly enable trusted subdomain sharing.
+The SRFSC GitHub Pages origin is allowed in Flask and the supplied nginx
+configuration; additional Flask origins can be listed in `CORS_ORIGINS`
+(comma-separated). Keep reverse-proxy CORS rules in sync for custom domains.
+For cross-site hosting, browsers must allow the backend's cookie; using a
+shared site domain avoids third-party cookie restrictions.
 
 Validation:
 
 ```bash
 venv/bin/python -m unittest testing.test_srfsc_profile -v
+# Real frontend JS client calling Flask through a local test transport:
+venv/bin/python -m unittest testing.test_capstone_login -v
 # From capstone2pages:
 node --test tests/test_srfsc_member.mjs
 make build-registered-projects ALL_PROJECTS=systems/srfsc

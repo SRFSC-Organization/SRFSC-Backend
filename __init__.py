@@ -40,10 +40,15 @@ allowed_origins = [
     'http://localhost:4000',
     'http://127.0.0.1:4000',
     'https://open-coding-society.github.io',
+    'https://srfsc-organization.github.io',
     # Regex pattern to match any subdomain of opencodingsociety.com
     r'https://.*\.opencodingsociety\.com',
     'https://opencodingsociety.com',
 ]
+allowed_origins.extend(
+    origin.strip() for origin in os.environ.get('CORS_ORIGINS', '').split(',')
+    if origin.strip()
+)
 
 cors = CORS(
    app,
@@ -96,6 +101,11 @@ app.config['SECRET_KEY'] = SECRET_KEY
 app.config['SESSION_COOKIE_NAME'] = SESSION_COOKIE_NAME
 app.config['JWT_TOKEN_NAME'] = JWT_TOKEN_NAME
 app.config['JWT_TOKEN_MAX_AGE'] = JWT_TOKEN_MAX_AGE
+# Host-only cookies work on any backend domain. Set a shared domain only when
+# multiple trusted backend hosts deliberately need the same cookie.
+app.config['JWT_COOKIE_DOMAIN'] = os.environ.get('JWT_COOKIE_DOMAIN') or None
+app.config['JWT_COOKIE_SECURE'] = os.environ.get('IS_PRODUCTION', 'false').lower() == 'true'
+app.config['JWT_COOKIE_SAMESITE'] = 'None' if app.config['JWT_COOKIE_SECURE'] else 'Lax'
 
 
 # Database settings

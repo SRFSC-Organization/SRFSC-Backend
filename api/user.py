@@ -5,6 +5,7 @@ import jwt
 import threading
 from flask import Blueprint, app, request, jsonify, current_app, Response, g
 from flask_restful import Api, Resource # used for REST API building
+from flask_login import logout_user
 from datetime import datetime, timedelta
 from __init__ import app, db
 from api.authorize import token_required
@@ -93,6 +94,17 @@ def _without_password(user_data):
     the hash to round-trip."""
     user_data.pop('password', None)
     return user_data
+
+
+def _auth_cookie_options():
+    """Use identical cookie scope when signing in and signing out."""
+    return dict(
+        secure=current_app.config.get('JWT_COOKIE_SECURE', False),
+        httponly=True,
+        path='/',
+        samesite=current_app.config.get('JWT_COOKIE_SAMESITE', 'Lax'),
+        domain=current_app.config.get('JWT_COOKIE_DOMAIN'),
+    )
 
 class UserAPI:
     class _ID(Resource):  # Individual identification API operation
@@ -477,6 +489,9 @@ class UserAPI:
                 if user is None or not user.is_password(password):
                     
                     return {'message': f"Invalid user id or password"}, 401
+
+                if not user.active:
+                    return {'message': 'Account pending verification.'}, 403
                             
                 # Check if user is found
                 if user:
@@ -495,7 +510,6 @@ class UserAPI:
                             algorithm="HS256"
                         )
                         # Return JSON response with cookie
-                        is_production = os.environ.get('IS_PRODUCTION', 'false').lower() == 'true'
                         
                         # Create JSON response
                         response_data = {
@@ -509,28 +523,11 @@ class UserAPI:
                         }
                         resp = jsonify(response_data)
                         
-                        # Set cookie
-                        if is_production:
-                            resp.set_cookie(
-                                current_app.config["JWT_TOKEN_NAME"],
-                                token,
-                                max_age=current_app.config["JWT_TOKEN_MAX_AGE"],
-                                secure=True,
-                                httponly=True,
-                                path='/',
-                                samesite='None',
-                                domain='.opencodingsociety.com'
-                            )
-                        else:
-                            resp.set_cookie(
-                                current_app.config["JWT_TOKEN_NAME"],
-                                token,
-                                max_age=current_app.config["JWT_TOKEN_MAX_AGE"],
-                                secure=False,
-                                httponly=False,  # Set to True for more security if JS access not needed
-                                path='/',
-                                samesite='Lax'
-                            )
+                        resp.set_cookie(
+                            current_app.config["JWT_TOKEN_NAME"], token,
+                            max_age=current_app.config["JWT_TOKEN_MAX_AGE"],
+                            **_auth_cookie_options(),
+                        )
                         return resp 
                     except Exception as e:
                         return {
@@ -551,43 +548,16 @@ class UserAPI:
                  
         @token_required()
         def delete(self):
-            ''' Invalidate the current user's token by setting its expiry to 0 '''
-            current_user = g.current_user
+            ''' Clear the authentication cookie and Flask-Login session. '''
             try:
-                # Generate a token with practically 0 age
-                token = jwt.encode(
-                    {"_uid": current_user._uid, 
-                     "exp": datetime.utcnow()},
-                    current_app.config["SECRET_KEY"],
-                    algorithm="HS256"
-                )
-                # You might want to log this action or take additional steps here
-                
-                # Prepare a response indicating the token has been invalidated
+                # Clear Flask-Login too; otherwise its session still authorizes
+                # requests even after the JWT cookie has been removed.
+                logout_user()
                 resp = Response("Token invalidated successfully")
-                is_production = os.environ.get('IS_PRODUCTION', 'false').lower() == 'true'
-                if is_production:
-                    resp.set_cookie(
-                        current_app.config["JWT_TOKEN_NAME"],
-                        token,
-                        max_age=0,  # Immediately expire the cookie
-                        secure=True,
-                        httponly=True,
-                        path='/',
-                        samesite='None',
-                        domain='.opencodingsociety.com'
-                
-                    )
-                else:
-                    resp.set_cookie(
-                        current_app.config["JWT_TOKEN_NAME"],
-                        token,
-                        max_age=0,  # Immediately expire the cookie
-                        secure=False,
-                        httponly=False,  # Set to True for more security if JS access not needed
-                        path='/',
-                        samesite='Lax'
-                    )
+                resp.delete_cookie(
+                    current_app.config["JWT_TOKEN_NAME"],
+                    **_auth_cookie_options(),
+                )
                 return resp
             except Exception as e:
                 return {

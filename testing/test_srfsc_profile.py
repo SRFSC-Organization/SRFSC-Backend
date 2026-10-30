@@ -133,9 +133,53 @@ class ProfileTest(unittest.TestCase):
         self.assertEqual(User.query.filter_by(_uid='neighbor').first().role, 'User')
 
     def test_pending_account_cannot_load_or_save_profile(self):
-        self.login('pending')
-        self.assertEqual(self.client.get('/api/srfsc/profile').status_code, 403)
-        self.assertEqual(self.save().status_code, 403)
+        response = self.login('pending')
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn('Set-Cookie', response.headers)
+        self.assertEqual(self.client.get('/api/srfsc/profile').status_code, 401)
+        self.assertEqual(self.save().status_code, 401)
+
+    def test_production_cookie_works_on_a_custom_backend_host_and_logout_clears_it(self):
+        self.app.config.update(JWT_COOKIE_SECURE=True, JWT_COOKIE_SAMESITE='None')
+        base = 'https://accounts.srfsc.example'
+        response = self.client.post('/api/login', base_url=base, json={
+            'uid': 'neighbor', 'password': 'TestPassword123!'})
+        self.assertEqual(response.status_code, 200)
+        cookie = response.headers['Set-Cookie']
+        for attribute in ('Secure', 'HttpOnly', 'SameSite=None', 'Path=/'):
+            self.assertIn(attribute, cookie)
+        self.assertNotIn('Domain=', cookie)
+        self.assertEqual(self.client.get('/api/login/me', base_url=base).status_code, 200)
+        response = self.client.delete('/api/login', base_url=base)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Max-Age=0', response.headers['Set-Cookie'])
+        self.assertEqual(self.client.get('/api/login/me', base_url=base).status_code, 401)
+
+    def test_logout_clears_a_flask_login_session_as_well_as_jwt(self):
+        from flask_login import login_user
+        user = User.query.filter_by(_uid='neighbor').first()
+        login_manager.user_loader(lambda user_id: db.session.get(User, user.id))
+        with self.app.test_request_context():
+            login_user(user)
+            from flask import session
+            saved_session = dict(session)
+        with self.client.session_transaction() as session:
+            session.update(saved_session)
+        self.assertEqual(self.client.get('/api/login/me').status_code, 200)
+        self.assertEqual(self.client.delete('/api/login').status_code, 200)
+        with self.client.session_transaction() as session:
+            self.assertNotIn('_user_id', session)
+
+    def test_explicit_shared_cookie_domain_is_used_for_login_and_logout(self):
+        self.app.config['JWT_COOKIE_DOMAIN'] = 'srfsc.example'
+        base = 'http://accounts.srfsc.example'
+        response = self.client.post('/api/login', base_url=base, json={
+            'uid': 'neighbor', 'password': 'TestPassword123!'})
+        self.assertIn('Domain=srfsc.example', response.headers['Set-Cookie'])
+        response = self.client.delete('/api/login', base_url=base)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Domain=srfsc.example', response.headers['Set-Cookie'])
+
 
     def test_malformed_payload_and_name_validation(self):
         self.login()
@@ -175,6 +219,30 @@ class ProfileTest(unittest.TestCase):
         self.assertEqual(imported['imported'], 1)
         restored = User.query.filter_by(_uid='restored-neighbor').first()
         self.assertEqual(restored._srfsc_profile['answers'], ANSWERS)
+
+
+class FrontendCorsTest(unittest.TestCase):
+    def test_real_app_allows_capstone_pages_preflight_and_error_responses(self):
+        from main import app
+        client = app.test_client()
+        origin = 'https://srfsc-organization.github.io'
+        for path, method in [('/api/login', 'POST'), ('/api/login', 'DELETE'),
+                             ('/api/srfsc/profile', 'PUT')]:
+            response = client.options(path, headers={
+                'Origin': origin, 'Access-Control-Request-Method': method,
+                'Access-Control-Request-Headers': 'content-type,x-origin'})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers['Access-Control-Allow-Origin'], origin)
+            self.assertEqual(response.headers['Access-Control-Allow-Credentials'], 'true')
+            self.assertIn(method, response.headers['Access-Control-Allow-Methods'])
+            self.assertIn('content-type', response.headers['Access-Control-Allow-Headers'].lower())
+            self.assertIn('x-origin', response.headers['Access-Control-Allow-Headers'].lower())
+        response = client.get('/api/login/me', headers={'Origin': origin})
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.headers['Access-Control-Allow-Origin'], origin)
+        response = client.options('/api/login', headers={
+            'Origin': 'https://untrusted.example', 'Access-Control-Request-Method': 'POST'})
+        self.assertNotIn('Access-Control-Allow-Origin', response.headers)
 
 
 class MigrationTest(unittest.TestCase):
