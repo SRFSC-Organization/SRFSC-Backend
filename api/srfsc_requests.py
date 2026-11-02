@@ -1,17 +1,22 @@
-"""Public request survey for the fire council, reviewed by council Admin accounts."""
+"""Public request survey for the fire council (with optional photos), reviewed by council Admin accounts."""
+import io
 import re
 from datetime import datetime, timezone
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, Response, current_app, g, jsonify, request
+from PIL import Image, ImageOps, UnidentifiedImageError
 from sqlalchemy.exc import SQLAlchemyError
 
 from __init__ import db
 from api.authorize import token_required
-from model.srfsc_request import REQUEST_STATUSES, REQUEST_TYPES, SrfscRequest
+from model.srfsc_request import MAX_PHOTOS, REQUEST_STATUSES, REQUEST_TYPES, SrfscRequest, SrfscRequestPhoto
 
 srfsc_requests_api = Blueprint('srfsc_requests_api', __name__, url_prefix='/api/srfsc/requests')
 
 EMAIL_PATTERN = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+PHOTO_FORMATS = {'JPEG', 'PNG', 'WEBP'}
+PHOTO_MAX_SIDE = 1600           # stored photos are at most this many pixels wide or tall
+PHOTO_MAX_PIXELS = 40_000_000   # refuse anything larger before decoding it
 
 
 def _text(body, field, label, min_length=1, max_length=100, required=True):
@@ -51,6 +56,34 @@ def validate_request(body):
     return clean, None
 
 
+def read_photo(upload):
+    """Decode one uploaded photo and re-save it as a JPEG without metadata (no GPS location).
+
+    Returns (jpeg bytes, width, height, error message); the error is None when the photo is usable.
+    """
+    try:
+        image = Image.open(upload.stream)
+        if image.format not in PHOTO_FORMATS:
+            return None, 0, 0, 'Photos must be JPEG, PNG, or WebP images.'
+        if image.width * image.height > PHOTO_MAX_PIXELS:
+            return None, 0, 0, 'That photo is too large. Please send a smaller one.'
+        image = ImageOps.exif_transpose(image).convert('RGB')
+        image.thumbnail((PHOTO_MAX_SIDE, PHOTO_MAX_SIDE))
+        output = io.BytesIO()
+        image.save(output, 'JPEG', quality=82, optimize=True)
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        return None, 0, 0, 'One of the photos could not be read. Please choose a JPEG, PNG, or WebP image.'
+    return output.getvalue(), image.width, image.height, None
+
+
+def read_submission():
+    """The survey fields and photo uploads, from a JSON body or a multipart form. Returns (fields, uploads)."""
+    if request.mimetype == 'multipart/form-data':
+        uploads = [upload for upload in request.files.getlist('photos') if upload and upload.filename]
+        return request.form.to_dict(), uploads
+    return request.get_json(silent=True), []
+
+
 def _commit(error_message):
     try:
         db.session.commit()
@@ -69,16 +102,25 @@ def options():
 @srfsc_requests_api.post('')
 @srfsc_requests_api.post('/')
 def submit_request():
-    clean, error = validate_request(request.get_json(silent=True))
+    body, uploads = read_submission()
+    clean, error = validate_request(body)
     if error:
         return jsonify(message=error), 400
+    if len(uploads) > MAX_PHOTOS:
+        return jsonify(message=f'Please attach at most {MAX_PHOTOS} photos.'), 400
     survey = SrfscRequest(**clean)
+    for upload in uploads:
+        data, width, height, error = read_photo(upload)
+        if error:
+            return jsonify(message=error), 400
+        survey.photos.append(SrfscRequestPhoto(data=data, width=width, height=height))
     db.session.add(survey)
     failed = _commit('Your request could not be saved.')
     if failed:
         return failed
+    photos = f' with {len(survey.photos)} photo{"s" if len(survey.photos) != 1 else ""}' if survey.photos else ''
     return jsonify(id=survey.id, status=survey.status,
-                   message=f'Thank you, {survey.name}. Request #{survey.id} was sent to the council.'), 201
+                   message=f'Thank you, {survey.name}. Request #{survey.id}{photos} was sent to the council.'), 201
 
 
 @srfsc_requests_api.get('')
@@ -93,6 +135,28 @@ def list_requests():
         query = query.filter_by(status=status)
     requests = query.order_by(SrfscRequest.created_at.desc(), SrfscRequest.id.desc()).all()
     return jsonify([survey.read(include_review=True) for survey in requests])
+
+
+@srfsc_requests_api.get('/<int:request_id>')
+@token_required('Admin')
+def get_request(request_id):
+    survey = db.session.get(SrfscRequest, request_id)
+    if survey is None:
+        return jsonify(message=f'Request #{request_id} was not found.'), 404
+    return jsonify(survey.read(include_review=True))
+
+
+@srfsc_requests_api.get('/<int:request_id>/photos/<int:photo_id>')
+@token_required('Admin')
+def get_photo(request_id, photo_id):
+    photo = db.session.get(SrfscRequestPhoto, photo_id)
+    if photo is None or photo.request_id != request_id:
+        return jsonify(message='Photo not found.'), 404
+    response = Response(photo.data, mimetype=photo.content_type)
+    # Private: residents' photos must never be kept by a shared cache.
+    response.headers['Cache-Control'] = 'private, max-age=3600'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 @srfsc_requests_api.put('/<int:request_id>')

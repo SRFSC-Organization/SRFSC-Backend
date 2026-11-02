@@ -1,4 +1,4 @@
-"""Requests the public sends to the Scripps Ranch Fire Safe Council, and their review status."""
+"""Requests the public sends to the Scripps Ranch Fire Safe Council, their photos, and their review status."""
 from datetime import datetime, timezone
 
 from __init__ import db
@@ -11,6 +11,7 @@ REQUEST_TYPES = [
     'Question or feedback',
 ]
 REQUEST_STATUSES = ['New', 'In review', 'Resolved']
+MAX_PHOTOS = 3
 
 
 class SrfscRequest(db.Model):
@@ -27,6 +28,8 @@ class SrfscRequest(db.Model):
     reviewed_by = db.Column(db.String(255), nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    photos = db.relationship('SrfscRequestPhoto', order_by='SrfscRequestPhoto.id', lazy='selectin',
+                             cascade='all, delete-orphan')
 
     def read(self, include_review=False):
         data = {
@@ -34,6 +37,7 @@ class SrfscRequest(db.Model):
             'request_type': self.request_type,
             'status': self.status,
             'created_at': self.created_at.isoformat() if self.created_at else None,
+            'photo_count': len(self.photos),
         }
         if include_review:
             # Contact details and council notes are only for admins.
@@ -45,5 +49,20 @@ class SrfscRequest(db.Model):
                 'admin_note': self.admin_note,
                 'reviewed_by': self.reviewed_by,
                 'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None,
+                'photo_ids': [photo.id for photo in self.photos],
             })
         return data
+
+
+class SrfscRequestPhoto(db.Model):
+    """A photo sent with a request. Stored re-encoded as JPEG (no location data); only admins can view it."""
+    __tablename__ = 'srfsc_request_photos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(db.Integer, db.ForeignKey('srfsc_requests.id'), nullable=False, index=True)
+    # Deferred: listing requests reads only photo ids; the bytes load when one photo is served.
+    data = db.deferred(db.Column(db.LargeBinary, nullable=False))
+    content_type = db.Column(db.String(32), nullable=False, default='image/jpeg')
+    width = db.Column(db.Integer, nullable=False)
+    height = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))

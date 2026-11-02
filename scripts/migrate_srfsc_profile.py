@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add SRFSC quiz and request-survey storage without resetting existing accounts or tables.
+"""Add SRFSC quiz, request-survey, and request-photo storage without resetting existing accounts or tables.
 
 An empty request table also gets one clearly labeled demo request so the council review page has
 something to show.
@@ -32,6 +32,11 @@ def migrate(engine):
         # Public council request survey (api/srfsc_requests.py).
         from model.srfsc_request import SrfscRequest
         db.metadata.create_all(bind=engine, tables=[SrfscRequest.__table__])
+        changed = True
+    if not inspect(engine).has_table('srfsc_request_photos'):
+        # Photos attached to survey requests; only council admins can view them.
+        from model.srfsc_request import SrfscRequestPhoto
+        db.metadata.create_all(bind=engine, tables=[SrfscRequestPhoto.__table__])
         changed = True
     if seed_demo_request(engine):
         changed = True

@@ -10,6 +10,7 @@ Flask_Cors
 PyJWT
 pandas
 numpy
+Pillow
 matplotlib
 seaborn
 scikit-learn
