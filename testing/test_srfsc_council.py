@@ -166,6 +166,25 @@ class SrfscApiTest(unittest.TestCase):
         self.assertEqual(created.status_code, 201)
         self.assertEqual(created.get_json()["event_date"], "2030-01-01")
 
+    def test_fresh_database_gets_labeled_demo_pins_once(self):
+        init_srfsc()
+        init_srfsc()
+        pins = self.client.get('/api/srfsc/map').get_json()
+        self.assertEqual(len(pins["hazards"]), 3)
+        demo_events = [event for event in pins["events"] if event["title"].endswith("(demo)")]
+        self.assertEqual(len(demo_events), 2)
+        self.assertTrue(all(event["description"].startswith("DEMO") for event in demo_events))
+
+    def test_real_reports_and_busy_calendars_get_no_demo_content(self):
+        self.client.post('/api/srfsc/reports', json={
+            "hazard_type": "Other", "location": "Trail", "description": "Brush pile"})
+        for days in (1, 2, 3):
+            SrfscEvent(f"Real {days}", "Clearing Day", date.today() + timedelta(days=days), "Park").create()
+        init_srfsc()
+        reports = self.client.get('/api/srfsc/reports', headers=self.admin_headers()).get_json()
+        self.assertEqual([report["location"] for report in reports], ["Trail"])
+        self.assertFalse(SrfscEvent.query.filter(SrfscEvent.title.like('%(demo)')).count())
+
     def test_seed_is_idempotent(self):
         init_srfsc()
         first_count = SrfscEvent.query.count()

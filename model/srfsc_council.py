@@ -9,7 +9,7 @@ Moved here from capstone2pages/srfsc_backend so one service runs the whole SRFSC
   - SrfscRsvp:         a neighbor joining a specific event (one RSVP per email per event)
   - SrfscUpdate:       community news, impact stories, and partner notes (the "trust" feed)
 """
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
@@ -224,6 +224,7 @@ def init_srfsc_council():
     _seed_events()
     _place_starter_events()
     _seed_updates()
+    _seed_demo_map()
 
 
 def _add_map_columns():
@@ -280,6 +281,38 @@ def _place_starter_events():
         event.latitude, event.longitude = STARTER_EVENT_PLACES[event.location]
     if unplaced:
         db.session.commit()
+
+
+# Demo map content, clearly labeled, so the live map and calendar have something to show.
+DEMO_HAZARDS = [
+    ("Hazard Tree", "Canyon behind Ironwood Rd (demo)", "Reviewed", 32.9196, -117.0811),
+    ("Dead Vegetation", "Slope above Pomerado Rd (demo)", "New", 32.9302, -117.0876),
+    ("Blocked Firebreak", "Fire road east of Lake Miramar (demo)", "Scheduled", 32.9151, -117.0868),
+]
+DEMO_EVENTS = [
+    # (days from today, title, type, location, latitude, longitude)
+    (16, "Block Meeting: Evacuation Routes (demo)", "Block Meeting", "Cypress Canyon Park", 32.9221, -117.0784),
+    (30, "Council Board Meeting (demo)", "Board Meeting", "SRFSC office, 9903 Businesspark Ave", 32.9048, -117.1137),
+]
+DEMO_NOTE = "DEMO - sample data so the live map has something to show."
+
+
+def _seed_demo_map():
+    """Demo hazard pins when there are no hazard reports at all, and demo events when fewer than
+    three are coming up. Real data is never changed, and running again adds nothing."""
+    if not SrfscHazardReport.query.first():
+        for hazard_type, location, status, latitude, longitude in DEMO_HAZARDS:
+            report = SrfscHazardReport(hazard_type, location, DEMO_NOTE, latitude=latitude, longitude=longitude)
+            report.status = status
+            db.session.add(report)
+    upcoming = SrfscEvent.query.filter(SrfscEvent.event_date >= date.today()).count()
+    demo_titles = {title for _, title, *_ in DEMO_EVENTS}
+    has_demo = SrfscEvent.query.filter(SrfscEvent.title.in_(demo_titles)).first() is not None
+    if upcoming < 3 and not has_demo:
+        for days, title, event_type, location, latitude, longitude in DEMO_EVENTS:
+            db.session.add(SrfscEvent(title, event_type, date.today() + timedelta(days=days), location,
+                                      DEMO_NOTE, latitude, longitude))
+    db.session.commit()
 
 
 def _seed_updates():
