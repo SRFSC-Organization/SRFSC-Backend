@@ -81,6 +81,10 @@ app.config['DEFAULT_PFP'] = os.environ.get('DEFAULT_PFP') or 'default.png'
 # tokens locally (no call back to Spring). No default -- unset means the
 # frontend-driven reset-password endpoint is closed.
 app.config['RESET_TOKEN_SECRET'] = os.environ.get('RESET_TOKEN_SECRET')
+
+# Shared key for the SRFSC Council admin page (events, volunteers, hazard reports); unset = key refused,
+# signed-in Admin accounts still work. See api/srfsc_council.py.
+app.config['SRFSC_ADMIN_KEY'] = os.environ.get('SRFSC_ADMIN_KEY', '')
 # OAuth client ID a student's Google ID token must be issued for. No default: unset means
 # no signup is auto-activated.
 app.config['GOOGLE_CLIENT_ID'] = os.environ.get('GOOGLE_CLIENT_ID')

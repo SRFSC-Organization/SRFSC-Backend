@@ -65,3 +65,7 @@ if __name__ == '__main__':
     with app.app_context():
         changed = migrate(db.engine)
         print('Created SRFSC account/profile storage.' if changed else 'SRFSC profile storage already exists.')
+        # Council events, volunteers, hazard reports, and updates (creates, upgrades, and seeds as needed).
+        from model.srfsc_council import init_srfsc_council
+        init_srfsc_council()
+        print('SRFSC council storage is ready.')

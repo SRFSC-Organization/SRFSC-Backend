@@ -36,6 +36,7 @@ from api.profile_game import profile_game_api  # CS Pathway Game profile persist
 from api.snapshot_proxy import snapshot_proxy
 from api.srfsc_profile import srfsc_profile_api
 from api.srfsc_requests import srfsc_requests_api
+from api.srfsc_council import srfsc_council_api
 #from api.announcement import announcement_api ##temporary revert
 
 # database Initialization functions
@@ -100,6 +101,7 @@ app.register_blueprint(profile_game_api)  # CS Pathway Game profile persistence
 app.register_blueprint(snapshot_proxy)  # Register the snapshot proxy API
 app.register_blueprint(srfsc_profile_api)
 app.register_blueprint(srfsc_requests_api)
+app.register_blueprint(srfsc_council_api)
 # app.register_blueprint(announcement_api) ##temporary revert
 
 # Jokes file initialization

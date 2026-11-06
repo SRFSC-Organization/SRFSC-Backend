@@ -61,6 +61,12 @@ an existing database; it resets tables.
 | GET | `/api/srfsc/profile` | Signed-in user's profile and saved answers |
 | PUT | `/api/srfsc/profile` | Update only the signed-in user's name and quiz |
 | GET | `/api/srfsc/requests/options` | Public list of request types and review statuses |
+| GET | `/api/srfsc/events` | Upcoming council events (`?all=true` includes past ones, for the calendar) |
+| POST | `/api/srfsc/events/<id>/rsvp` | Public RSVP to an event |
+| GET | `/api/srfsc/map` | Public map pins: upcoming events and unresolved hazard reports (rounded, no contact details) |
+| GET | `/api/srfsc/stats`, `/api/srfsc/conditions`, `/api/srfsc/updates` | Public dashboard counts, NWS fire weather, community updates |
+| POST | `/api/srfsc/volunteers`, `/api/srfsc/reports` | Public volunteer sign-up and hazard report (optional map pin) |
+| GET/PUT/POST/DELETE | `/api/srfsc/volunteers`, `/api/srfsc/reports/<id>`, `/api/srfsc/events`, `/api/srfsc/updates` | Council admin: a signed-in Admin account or `Authorization: Bearer <SRFSC_ADMIN_KEY>` |
 | POST | `/api/srfsc/requests` | Public request survey (name, email, request type, message, optional neighborhood) |
 | GET | `/api/srfsc/requests` | Council `Admin` accounts only: all requests, newest first (`?status=New` filters) |
 | PUT | `/api/srfsc/requests/<id>` | Council `Admin` accounts only: set `status` and an optional `admin_note` |
