@@ -171,19 +171,58 @@ class SrfscApiTest(unittest.TestCase):
         init_srfsc()
         pins = self.client.get('/api/srfsc/map').get_json()
         self.assertEqual(len(pins["hazards"]), 3)
-        demo_events = [event for event in pins["events"] if event["title"].endswith("(demo)")]
+        demo_events = [event for event in pins["events"] if event["is_demo"]]
         self.assertEqual(len(demo_events), 2)
+        self.assertTrue(all(event["title"].endswith("(demo)") for event in demo_events))
         self.assertTrue(all(event["description"].startswith("DEMO") for event in demo_events))
+        # Only labeled demo events are seeded: no undated "real-looking" placeholders.
+        all_events = self.client.get('/api/srfsc/events?all=true').get_json()
+        self.assertTrue(all(event["is_demo"] for event in all_events))
 
-    def test_real_reports_and_busy_calendars_get_no_demo_content(self):
+    def test_old_placeholder_events_are_relabeled_as_demo(self):
+        SrfscEvent("Fire Safety Expo", "Fire Safety Expo", date.today() + timedelta(days=5),
+                   "Scripps Ranch Community Park", "Meet San Diego Fire-Rescue.").create()
+        SrfscEvent("Fire Safety Expo", "Fire Safety Expo", date.today() + timedelta(days=6),
+                   "Council office", "Real event the council added.").create()
+        init_srfsc()
+        init_srfsc()
+        by_location = {e["location"]: e for e in self.client.get('/api/srfsc/events?all=true').get_json()}
+        old = by_location["Scripps Ranch Community Park"]
+        self.assertTrue(old["is_demo"])
+        self.assertEqual(old["title"], "Fire Safety Expo (demo)")
+        self.assertTrue(old["description"].startswith("DEMO"))
+        real = by_location["Council office"]
+        self.assertFalse(real["is_demo"])
+        self.assertEqual(real["title"], "Fire Safety Expo")
+
+    def test_adding_a_real_event_removes_the_samples(self):
+        init_srfsc()
+        self.assertTrue(SrfscEvent.query.filter_by(is_demo=True).count())
+        payload = {"title": "Clearing Day", "event_type": "Clearing Day",
+                   "event_date": (date.today() + timedelta(days=9)).isoformat(), "location": "Canyon"}
+        created = self.client.post('/api/srfsc/events', json=payload, headers=self.admin_headers())
+        self.assertEqual(created.status_code, 201)
+        titles = [e["title"] for e in self.client.get('/api/srfsc/events?all=true').get_json()]
+        self.assertEqual(titles, ["Clearing Day"])
+        init_srfsc()   # a restart does not bring the samples back
+        self.assertFalse(SrfscEvent.query.filter_by(is_demo=True).count())
+
+    def test_demo_events_do_not_take_rsvps(self):
+        init_srfsc()
+        demo = SrfscEvent.query.filter_by(is_demo=True).first()
+        response = self.client.post(f'/api/srfsc/events/{demo.id}/rsvp',
+                                    json={"name": "Sam", "email": "sam@example.org"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(demo.rsvps.count(), 0)
+
+    def test_real_reports_and_events_get_no_demo_content(self):
         self.client.post('/api/srfsc/reports', json={
             "hazard_type": "Other", "location": "Trail", "description": "Brush pile"})
-        for days in (1, 2, 3):
-            SrfscEvent(f"Real {days}", "Clearing Day", date.today() + timedelta(days=days), "Park").create()
+        SrfscEvent("Real", "Clearing Day", date.today() - timedelta(days=30), "Park").create()
         init_srfsc()
         reports = self.client.get('/api/srfsc/reports', headers=self.admin_headers()).get_json()
         self.assertEqual([report["location"] for report in reports], ["Trail"])
-        self.assertFalse(SrfscEvent.query.filter(SrfscEvent.title.like('%(demo)')).count())
+        self.assertFalse(SrfscEvent.query.filter_by(is_demo=True).count())
 
     def test_seed_is_idempotent(self):
         init_srfsc()
@@ -319,6 +358,7 @@ class SrfscMapTest(unittest.TestCase):
         init_srfsc()   # running again changes nothing
         event = SrfscEvent.query.filter_by(title='Old expo').one()
         self.assertEqual((event.latitude, event.longitude), (32.9258, -117.0718))
+        self.assertFalse(event.is_demo)   # new column defaults to a real event
 
 
 class SrfscConditionsTest(unittest.TestCase):

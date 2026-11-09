@@ -33,6 +33,26 @@ or creates empty account tables for a fresh database. It is safe to repeat and
 does not create default passwords. Run it before starting the updated server.
 For an existing database, back it up before deploying schema changes.
 
+### Keep council data between deploys
+
+Events, RSVPs, hazard reports, volunteers, and accounts are stored in the
+database. When `DB_ENDPOINT`, `DB_USERNAME`, and `DB_PASSWORD` are not all set,
+the app falls back to SQLite in `instance/volumes/`. On Render that folder is
+erased on every deploy and restart unless a persistent disk is mounted at
+`instance/volumes`, so events added on the admin page would disappear and the
+demo content would come back. Before the council relies on the site, either set
+the MySQL variables or attach a disk. `scripts/render_start.sh` prints a warning
+in the Render logs when it is falling back to SQLite.
+
+### Demo events
+
+An empty calendar gets two sample events with `is_demo` set. The site labels
+them "Sample" and they refuse RSVPs. They are only added while the council has
+never posted a real event. Placeholder events from earlier versions (made-up
+dates such as the "Fire Safety Expo") are relabeled as demo on startup. All
+sample events are removed as soon as an admin adds a real event on the admin
+page.
+
 A council operator can provision an account locally; the password is prompted
 and is never supplied in a command argument:
 

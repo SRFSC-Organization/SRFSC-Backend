@@ -57,11 +57,16 @@ class SrfscEvent(SrfscModelMixin, db.Model):
     description = db.Column(db.Text, nullable=True)
     latitude = db.Column(db.Float, nullable=True)
     longitude = db.Column(db.Float, nullable=True)
+    # Sample events seeded so an empty calendar has something to show. They are labeled on the
+    # site, cannot take RSVPs, and admins delete them once the council posts real dates.
+    is_demo = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    def __init__(self, title, event_type, event_date, location, description=None, latitude=None, longitude=None):
+    def __init__(self, title, event_type, event_date, location, description=None, latitude=None, longitude=None,
+                 is_demo=False):
         self.latitude = latitude
         self.longitude = longitude
+        self.is_demo = is_demo
         self.title = title
         self.event_type = event_type
         self.event_date = event_date
@@ -81,6 +86,7 @@ class SrfscEvent(SrfscModelMixin, db.Model):
             "description": self.description,
             "latitude": self.latitude,
             "longitude": self.longitude,
+            "is_demo": bool(self.is_demo),
         }
 
 
@@ -217,55 +223,35 @@ COUNCIL_MODELS = (SrfscEvent, SrfscVolunteer, SrfscHazardReport, SrfscRsvp, Srfs
 
 
 def init_srfsc_council():
-    """Create the council tables (only these; never the account tables) and seed starter content
-    so the dashboard is not empty on a fresh database. Safe to run on every start."""
+    """Create the council tables (only these; never the account tables), label old sample events,
+    and seed clearly labeled demo content so an empty site is not blank. Safe to run on every start."""
     db.metadata.create_all(bind=db.engine, tables=[model.__table__ for model in COUNCIL_MODELS])
-    _add_map_columns()
-    _seed_events()
-    _place_starter_events()
+    _add_missing_columns()
+    _place_known_locations()
+    _label_sample_events()
     _seed_updates()
     _seed_demo_map()
 
 
-def _add_map_columns():
-    """Databases made before map pins existed get the latitude/longitude columns (create_all skips them)."""
+# Columns added after the tables first shipped (create_all does not alter existing tables).
+ADDED_COLUMNS = {
+    'srfsc_events': {'latitude': 'FLOAT', 'longitude': 'FLOAT', 'is_demo': 'BOOLEAN NOT NULL DEFAULT 0'},
+    'srfsc_hazard_reports': {'latitude': 'FLOAT', 'longitude': 'FLOAT'},
+}
+
+
+def _add_missing_columns():
     inspector = inspect(db.engine)
-    for table in ('srfsc_events', 'srfsc_hazard_reports'):
+    for table, columns in ADDED_COLUMNS.items():
         existing = {column['name'] for column in inspector.get_columns(table)}
-        for column in ('latitude', 'longitude'):
+        for column, column_type in columns.items():
             if column not in existing:
                 with db.engine.begin() as connection:
-                    connection.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} FLOAT'))
+                    connection.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {column_type}'))
 
 
-def _starter_event(title, event_type, event_date, location, description):
-    return SrfscEvent(title, event_type, event_date, location, description, *STARTER_EVENT_PLACES[location])
-
-
-def _seed_events():
-    with db.session.no_autoflush:
-        if SrfscEvent.query.first():
-            return
-        # Map positions (STARTER_EVENT_PLACES) are approximate.
-        seed_events = [
-            _starter_event("Monthly Clearing Day", "Clearing Day", date(2026, 10, 17),
-                           "Canyon edge behind Ellingham Elementary",
-                           "Help clear dead brush and maintain firebreaks. Gloves and tools provided."),
-            _starter_event("Block Meeting: Defensible Space 101", "Block Meeting", date(2026, 10, 24),
-                           "Scripps Ranch Library Community Room",
-                           "Learn the 0-5 ft, 5-30 ft, and 30-100 ft defensible space zones."),
-            _starter_event("Fire Safety Expo", "Fire Safety Expo", date(2026, 11, 7),
-                           "Scripps Ranch Community Park",
-                           "Meet San Diego Fire-Rescue and CAL FIRE, see home hardening demos."),
-            _starter_event("November Clearing Day", "Clearing Day", date(2026, 11, 21),
-                           "Lake Miramar trailhead firebreak",
-                           "Hazard tree follow-up and firebreak maintenance."),
-        ]
-        for event in seed_events:
-            event.create()
-
-
-STARTER_EVENT_PLACES = {
+# Approximate map positions for council venues, used for events saved before map pins existed.
+KNOWN_PLACES = {
     "Canyon edge behind Ellingham Elementary": (32.9238, -117.1032),
     "Scripps Ranch Library Community Room": (32.9174, -117.0898),
     "Scripps Ranch Community Park": (32.9258, -117.0718),
@@ -273,17 +259,42 @@ STARTER_EVENT_PLACES = {
 }
 
 
-def _place_starter_events():
-    """Starter events saved before map pins existed get their (approximate) positions."""
+def _place_known_locations():
     unplaced = SrfscEvent.query.filter(SrfscEvent.latitude.is_(None),
-                                       SrfscEvent.location.in_(STARTER_EVENT_PLACES)).all()
+                                       SrfscEvent.location.in_(KNOWN_PLACES)).all()
     for event in unplaced:
-        event.latitude, event.longitude = STARTER_EVENT_PLACES[event.location]
+        event.latitude, event.longitude = KNOWN_PLACES[event.location]
     if unplaced:
         db.session.commit()
 
 
-# Demo map content, clearly labeled, so the live map and calendar have something to show.
+# Placeholder events that earlier versions seeded with made-up dates. They were never confirmed
+# by the council, so databases that still hold them (unedited) get them labeled as demo data.
+LEGACY_STARTER_EVENTS = {
+    ("Monthly Clearing Day", "Canyon edge behind Ellingham Elementary"),
+    ("Block Meeting: Defensible Space 101", "Scripps Ranch Library Community Room"),
+    ("Fire Safety Expo", "Scripps Ranch Community Park"),
+    ("November Clearing Day", "Lake Miramar trailhead firebreak"),
+}
+
+
+def _label_sample_events():
+    changed = False
+    for event in SrfscEvent.query.filter(SrfscEvent.is_demo.is_(False)).all():
+        legacy = (event.title, event.location) in LEGACY_STARTER_EVENTS
+        if legacy or event.title in DEMO_EVENT_TITLES:
+            event.is_demo = True
+            if not event.title.endswith(DEMO_SUFFIX):
+                event.title += DEMO_SUFFIX
+            if legacy:
+                event.description = DEMO_NOTE
+            changed = True
+    if changed:
+        db.session.commit()
+
+
+# Demo content, clearly labeled, so the live map and calendar have something to show until the
+# council posts real events and residents send real reports.
 DEMO_HAZARDS = [
     ("Hazard Tree", "Canyon behind Ironwood Rd (demo)", "Reviewed", 32.9196, -117.0811),
     ("Dead Vegetation", "Slope above Pomerado Rd (demo)", "New", 32.9302, -117.0876),
@@ -294,24 +305,33 @@ DEMO_EVENTS = [
     (16, "Block Meeting: Evacuation Routes (demo)", "Block Meeting", "Cypress Canyon Park", 32.9221, -117.0784),
     (30, "Council Board Meeting (demo)", "Board Meeting", "SRFSC office, 9903 Businesspark Ave", 32.9048, -117.1137),
 ]
-DEMO_NOTE = "DEMO - sample data so the live map has something to show."
+DEMO_SUFFIX = " (demo)"
+DEMO_EVENT_TITLES = {title for _, title, *_ in DEMO_EVENTS}
+DEMO_NOTE = "DEMO - sample event, not a real council date. Call 858-201-3711 for the next one."
+DEMO_HAZARD_NOTE = "DEMO - sample hazard so the live map has something to show."
+
+
+def remove_demo_events():
+    """Delete every sample event. Called when an admin posts a real one."""
+    removed = SrfscEvent.query.filter(SrfscEvent.is_demo.is_(True)).delete(synchronize_session=False)
+    if removed:
+        db.session.commit()
+    return removed
 
 
 def _seed_demo_map():
-    """Demo hazard pins when there are no hazard reports at all, and demo events when fewer than
-    three are coming up. Real data is never changed, and running again adds nothing."""
+    """Demo hazard pins when there are no hazard reports at all, and demo events when the council
+    has never posted a real event. Real data is never changed, and running again adds nothing."""
     if not SrfscHazardReport.query.first():
         for hazard_type, location, status, latitude, longitude in DEMO_HAZARDS:
-            report = SrfscHazardReport(hazard_type, location, DEMO_NOTE, latitude=latitude, longitude=longitude)
+            report = SrfscHazardReport(hazard_type, location, DEMO_HAZARD_NOTE, latitude=latitude, longitude=longitude)
             report.status = status
             db.session.add(report)
-    upcoming = SrfscEvent.query.filter(SrfscEvent.event_date >= date.today()).count()
-    demo_titles = {title for _, title, *_ in DEMO_EVENTS}
-    has_demo = SrfscEvent.query.filter(SrfscEvent.title.in_(demo_titles)).first() is not None
-    if upcoming < 3 and not has_demo:
+    # Any event at all (real, or demo already seeded) means the calendar is not empty.
+    if SrfscEvent.query.first() is None:
         for days, title, event_type, location, latitude, longitude in DEMO_EVENTS:
             db.session.add(SrfscEvent(title, event_type, date.today() + timedelta(days=days), location,
-                                      DEMO_NOTE, latitude, longitude))
+                                      DEMO_NOTE, latitude, longitude, is_demo=True))
     db.session.commit()
 
 

@@ -21,7 +21,8 @@ from api.srfsc_council_validation import (
     validate_event, validate_hazard_report, validate_report_status, validate_rsvp,
     validate_update, validate_volunteer,
 )
-from model.srfsc_council import SrfscEvent, SrfscHazardReport, SrfscRsvp, SrfscUpdate, SrfscVolunteer
+from model.srfsc_council import (SrfscEvent, SrfscHazardReport, SrfscRsvp, SrfscUpdate, SrfscVolunteer,
+                                 remove_demo_events)
 
 srfsc_council_api = Blueprint('srfsc_council_api', __name__, url_prefix='/api/srfsc')
 api = Api(srfsc_council_api)
@@ -71,6 +72,8 @@ class SrfscAPI:
             event = SrfscEvent(**clean).create()
             if event is None:
                 return {"message": "Could not save event."}, 500
+            # The first real event replaces the sample ones (they never take RSVPs, so nothing is lost).
+            remove_demo_events()
             return event.read(), 201
 
     class _Event(Resource):
@@ -89,6 +92,8 @@ class SrfscAPI:
                 return {"message": f"Event {event_id} not found."}, 404
             if event.event_date < date.today():
                 return {"message": "This event has already happened."}, 400
+            if event.is_demo:
+                return {"message": "This is a sample event, so it does not take RSVPs."}, 400
             clean, error = validate_rsvp(request.get_json(silent=True))
             if error:
                 return {"message": error}, 400
