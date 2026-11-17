@@ -6,7 +6,7 @@ services:
     env_file:
       - .env # Required; provide a private SECRET_KEY for production startup
     ports:
-      - "8490:8587"
+      - "8490:8490"
     volumes:
       - ./instance:/app/instance
     restart: unless-stopped
@@ -15,7 +15,7 @@ services:
     image: socket_open
     build: ./socket
     ports:
-      - "8491:8500"
+      - "8491:8491"
     restart: unless-stopped
 
   code_runner:
