@@ -104,6 +104,22 @@ configuration; additional Flask origins can be listed in `CORS_ORIGINS`
 For cross-site hosting, browsers must allow the backend's cookie; using a
 shared site domain avoids third-party cookie restrictions.
 
+The Docker image starts with `scripts/start_production.sh`: it requires a
+private `SECRET_KEY`, enables production cookies, prepares account storage
+without resetting it, and binds to the provider's `PORT` (8587 by default).
+Mount a persistent writable volume at `/app/instance` when using SQLite;
+accounts must survive redeployments. Local databases, credentials, and cookie
+files are excluded from the image. Provision members on the deployed server
+with `scripts/create_srfsc_member.py`; local accounts are not copied into a
+new deployment. The published frontend cannot sign in until the backend is
+deployed, its URL is configured, and a verified member exists there.
+
+For this team's AWS deployment, Compose publishes the Flask API on port
+8490 (container port 8587) and the socket service on port 8491 (container
+port 8500). Create a private, untracked `.env` before starting Compose
+and set a strong `SECRET_KEY`. Leave `PORT` unset or set it to `8587`
+for this Compose mapping; `8490` is the host port, not the container port.
+
 Validation:
 
 ```bash

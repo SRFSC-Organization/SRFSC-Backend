@@ -20,6 +20,9 @@ RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
     pip install gunicorn
 
+# Runtime storage is intentionally excluded from the image build context.
+RUN mkdir -p /app/instance/volumes
+
 # Create non-privileged user and set file permissions
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app && \
@@ -43,4 +46,4 @@ ENV FLASK_ENV=production \
 EXPOSE 8587
 
 # Start Gunicorn server
-CMD ["gunicorn", "main:app"]
+CMD ["sh", "scripts/start_production.sh"]

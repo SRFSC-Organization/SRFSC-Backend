@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+venv
+.venv
+**/__pycache__
+**/*.pyc
+instance
+*.log
+cookies.txt
+.aws
+.ssh
