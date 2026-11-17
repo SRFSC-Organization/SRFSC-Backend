@@ -57,7 +57,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 const origin = 'https://srfsc-organization.github.io';
-const endpoint = 'http://localhost:8587';
+const endpoint = 'http://localhost:8490';
 const replies = createInterface({ input: process.stdin })[Symbol.asyncIterator]();
 globalThis.fetch = async (url, options = {}) => {
   console.log(JSON.stringify({ path: new URL(url).pathname, method: options.method || 'GET',

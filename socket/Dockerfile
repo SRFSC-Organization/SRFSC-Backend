@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install eventlet
 
 # Expose the port used by your Flask-SocketIO server
-EXPOSE 8500
+EXPOSE 8491
 
 ENV FLASK_ENV=production
 

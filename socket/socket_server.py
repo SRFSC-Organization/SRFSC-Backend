@@ -49,4 +49,4 @@ def handle_get_leaderboard():
 # this runs the flask application on the development server
 if __name__ == "__main__":
     # change name for testing
-    socketio.run(app, debug=True, host="0.0.0.0", port=8500)
+    socketio.run(app, debug=True, host="0.0.0.0", port=8491)

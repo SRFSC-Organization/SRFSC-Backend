@@ -76,7 +76,7 @@ All endpoints require JWT authentication (except where noted):
 
 ```bash
 # This should return an authentication error (which means the API is working!)
-curl http://localhost:8587/api/post/all
+curl http://localhost:8490/api/post/all
 ```
 
 Expected response:
@@ -89,7 +89,7 @@ Expected response:
 ### Test 2: Create a Post (After Login)
 
 ```bash
-curl -X POST http://localhost:8587/api/post \
+curl -X POST http://localhost:8490/api/post \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -101,7 +101,7 @@ curl -X POST http://localhost:8587/api/post \
 ### Test 3: View All Posts
 
 ```bash
-curl http://localhost:8587/api/post/all \
+curl http://localhost:8490/api/post/all \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -194,7 +194,7 @@ Edit the grade dropdown in `post.md` (lines 416-430):
 
 ### Issue: "No posts showing"
 **Solution:** 
-1. Check backend is running: `http://localhost:8587/api/post/all`
+1. Check backend is running: `http://localhost:8490/api/post/all`
 2. Make sure you're logged in on the frontend
 3. Create a test post to verify
 

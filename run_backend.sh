@@ -19,7 +19,7 @@ fi
 
 # Run the Flask app
 python scripts/migrate_srfsc_profile.py
-echo "✓ Starting Flask on http://localhost:${FLASK_PORT:-8587}"
+echo "✓ Starting Flask on http://localhost:${FLASK_PORT:-8490}"
 echo ""
 exec python main.py
 

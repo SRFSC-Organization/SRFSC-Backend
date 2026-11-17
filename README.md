@@ -8,7 +8,7 @@ pages under `_projects/systems/srfsc/navigation/`. Its member login is
 (prepend the frontend's configured base URL).
 
 These pages use this Flask backend's account service, configured through the
-frontend's `assets/js/api/config.js` (`srfscAccountURI`, locally port 8587). Existing
+frontend's `assets/js/api/config.js` (`srfscAccountURI`, locally port 8490). Existing
 SRFSC events and reports continue using the frontend's separate council service
 on port 8599. They are separate services.
 
@@ -17,8 +17,8 @@ on port 8599. They are separate services.
 No public server is needed for local login. Start this backend with
 `./run_backend.sh`, then run `make serve-current` from `../capstone2pages`.
 Open `http://localhost:4500/capstone/srfsc/app/login/` and sign in with a
-verified account. The frontend automatically uses `http://localhost:8587`
-on localhost (or `http://127.0.0.1:8587` when opened through 127.0.0.1).
+verified account. The frontend automatically uses `http://localhost:8490`
+on localhost (or `http://127.0.0.1:8490` when opened through 127.0.0.1).
 Use the provisioning command below if you do not have an account yet.
 Restart an already-running backend after pulling authentication changes.
 
@@ -66,7 +66,7 @@ venv/bin/python scripts/create_srfsc_member.py --uid council-admin --name "Counc
 
 Existing verified accounts also work. New school accounts retain the existing
 verification flow. SRFSC provisioning does not require school or GitHub signup.
-Ensure port 8587 is serving **this checkout**; another Flask repository on the
+Ensure port 8490 is serving **this checkout**; another Flask repository on the
 same port will not have these new endpoints. Do not run `db_init.py` to migrate
 an existing database; it resets tables.
 
@@ -256,11 +256,11 @@ pip install -r requirements.txt
     - Start with Play button
       - Play button sub option contains Debug
     - Click on localhost:8087 in terminal to launch
-      - Output window will contain page to launch http://localhost:8587
+      - Output window will contain page to launch http://localhost:8490
     - Login using your secrets from env
 
   - Basic API test
-    - [Jokes](http://localhost:8587/api/jokes/)
+    - [Jokes](http://localhost:8490/api/jokes/)
 
 ### User Operations
 | Purpose | Correct Endpoint | What It Does |
